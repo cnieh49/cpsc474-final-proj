@@ -1,6 +1,112 @@
 import random
 import os
 import argparse
+import time
+import math
+
+
+
+
+class Node:
+    def __init__(self, state, action=None):
+        self.state = state
+        self.parent = None
+        self.children = []
+        self.n = 0
+        self.r = 0
+        self.action = action
+        self.expanded = False
+
+def UCB(r, n, T):
+    exploration = math.sqrt(2 * math.log(T) / n)
+    return (r / n) + exploration
+
+def traverse(node):
+    while node.expanded:
+        unvisited_children = []
+        for child in node.children:
+            if child.n == 0:
+                unvisited_children.append(child)
+        if unvisited_children:
+            return random.choice(unvisited_children)
+        
+        T = node.n
+        ucb_child = max(node.children, key=lambda child: UCB(child.r, child.n, T))
+        node = ucb_child
+    return node
+
+
+def expand(node):
+    """
+    Expand the current node by generating all possible moves.
+    """
+
+    if node.state.can_move() and not node.expanded:
+        actions = node.state.possible_moves()
+
+        for action in actions:
+            new_state = node.state.next_move(action)
+            new_node = Node(new_state, action)
+            new_node.parent = node
+            node.children.append(new_node)
+        node.expanded = True
+        return random.choice(node.children)
+    return node
+
+
+def simulate(state):
+    """
+    Simulate a random playthrough from the given state and return the score.
+    """
+    while state.can_move():
+        actions = state.possible_moves()
+        action = random.choice(actions)
+        state = state.next_move(action)
+    return state.score
+
+
+def update(node, reward):
+    """
+    Backpropagate the simulation results through the tree.
+    """
+    while node:
+        node.n += 1
+        node.r += reward
+        node = node.parent
+
+def mcts_policy(root_state, time_limit=3.0):
+    """
+    Run MCTS to determine the best move from the root state.
+    """
+    root = Node(root_state)
+    start_time = time.time()
+
+    while time.time() - start_time < time_limit:
+        # Selection
+        leaf = traverse(root)
+
+        # Expansion
+        expanded_node = expand(leaf)
+
+        # Simulation
+        reward = simulate(expanded_node.state)
+
+        # Backpropagation
+        update(expanded_node, reward)
+        
+
+    # Choose the best move based on visits
+    best_child = max(root.children, key=lambda c: c.r / c.n)
+    return best_child.action
+
+
+
+
+
+
+
+
+
 
 class Game2048:
     def __init__(self):
@@ -10,6 +116,49 @@ class Game2048:
         self.highest = 2
         self.add_random_tile_new()
         self.add_random_tile_new()
+
+    def next_move(self, move):
+        if move == 'w':
+            self.slide_up()
+        elif move == 'a':
+            self.slide_left()
+        elif move == 's':
+            self.slide_down()
+        else:
+            self.slide_right()
+        self.add_random_tile()
+
+        return self
+
+    def possible_moves(self):
+        moves = []
+        old_board = [row[:] for row in self.board]
+
+        self.slide_up()
+        if self.board != old_board:
+            moves.append("w")
+        else:
+            self.board = [row[:] for row in old_board]
+
+        self.slide_left()
+        if self.board != old_board:
+            moves.append("a")
+        else:
+            self.board = [row[:] for row in old_board]
+
+        self.slide_down()
+        if self.board != old_board:
+            moves.append("s")
+        else:
+            self.board = [row[:] for row in old_board]
+
+        self.slide_right()
+        if self.board != old_board:
+            moves.append("d")
+        else:
+            self.board = [row[:] for row in old_board]
+        return moves
+
 
     def add_random_tile_new(self):
         empty_tiles = [(r, c) for r in range(self.size) for c in range(self.size) if self.board[r][c] == 0]
@@ -137,6 +286,15 @@ class Game2048:
                 elif r_move:
                     return 3
             return random.choice([0, 1])
+        if strat == 5:
+            moves = ['w', 'a', 's', 'd']
+            move = mcts_policy(self, time_limit=1.0)
+            return moves.index(move)
+
+
+
+
+
 
     def can_move_right(self):
         old_board = [row[:] for row in self.board]
@@ -222,7 +380,7 @@ def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Run multiple 2048 game simulations.")
     parser.add_argument("games", type=int, help="Number of games to simulate")
-    parser.add_argument("strategy", type=int, choices=[1, 2, 3, 4], help="Strategy to use (1, 2, or 3)")
+    parser.add_argument("strategy", type=int, choices=[1, 2, 3, 4, 5], help="Strategy to use (1, 2, or 3)")
     # 1 - looping moves between w, a, s, d repeatedly until failure
     # 2 - completely random
     # 3 - random pick between going right and going down (make a random choice if you can't do either)
@@ -243,6 +401,7 @@ def main():
         # print(f"Starting Game {game_number} with Strategy {args.strategy}...")
         game = Game2048()
         game.simulate_game(strat=args.strategy)
+
         # print(f"Game {game_number} Final Score: {game.score}\n")
         total_score += game.score
         high_tile = max(high_tile, game.highest)
