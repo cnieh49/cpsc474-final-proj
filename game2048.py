@@ -4,6 +4,89 @@ import argparse
 import time
 import math
 
+def expectimax_policy(state, depth):
+    """
+    Determine the best move using the Expectimax algorithm.
+    :param state: Current Game2048 state.
+    :param depth: Depth limit for the Expectimax search.
+    :return: The best move ('w', 'a', 's', 'd').
+    """
+    best_move = None
+    best_value = float('-inf')
+    moves = state.possible_moves()
+
+    for move in moves:
+        # Simulate the state for the move
+        board_copy = [row[:] for row in state.board]
+        score_copy = state.score
+        state.next_move(move)
+        
+        # Recursively evaluate using Expectimax
+        value = expectimax(state, depth - 1)
+
+        # Restore the state after simulation
+        state.board = board_copy
+        state.score = score_copy
+
+        # Update the best move if necessary
+        if value > best_value:
+            best_value = value
+            best_move = move
+    return best_move
+
+
+
+def expectimax(state, depth):
+    """
+    Recursive Expectimax algorithm to evaluate the best move.
+    :param state: Current Game2048 state.
+    :param depth: Depth limit for recursion.
+    :return: The expected score of the state.
+    """
+    if depth == 0 or not state.can_move():
+        return state.score
+
+    max_value = float('-inf')
+    for move in state.possible_moves():
+        # Simulate the state for the move
+        board_copy = [row[:] for row in state.board]
+        score_copy = state.score
+        state.next_move(move)
+
+        # Recursively evaluate the state
+        value = expectimax(state, depth - 1)
+
+        # Restore the state after simulation
+        state.board = board_copy
+        state.score = score_copy
+
+        max_value = max(max_value, value)
+
+    return max_value
+
+    # else:
+    #     # Chance node (random tile placement)
+    #     total_value = 0
+    #     empty_tiles = [(r, c) for r in range(state.size) for c in range(state.size) if state.board[r][c] == 0]
+    #     if not empty_tiles:
+    #         return state.score
+
+    #     for r, c in empty_tiles:
+    #         # Simulate placing a '2' (90% probability)
+    #         state.board[r][c] = 2
+    #         value_2 = expectimax(state, depth - 1, True)
+    #         total_value += 0.9 * value_2
+
+    #         # Simulate placing a '4' (10% probability)
+    #         state.board[r][c] = 4
+    #         value_4 = expectimax(state, depth - 1, True)
+    #         total_value += 0.1 * value_4
+
+    #         # Undo the tile placement
+    #         state.board[r][c] = 0
+
+    #     return total_value / len(empty_tiles)
+
 
 
 
@@ -126,9 +209,10 @@ class Game2048:
             self.slide_down()
         else:
             self.slide_right()
-        self.add_random_tile()
 
+        self.add_random_tile()
         return self
+    
 
     def possible_moves(self):
         moves = []
@@ -290,6 +374,13 @@ class Game2048:
             moves = ['w', 'a', 's', 'd']
             move = mcts_policy(self, time_limit=1.0)
             return moves.index(move)
+        
+
+        if strat == 7:
+            self.print_board()
+            moves = ['w', 'a', 's', 'd']
+            move = expectimax_policy(self, 3)  # Adjust depth for performance
+            return moves.index(move)
 
 
 
@@ -380,7 +471,7 @@ def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Run multiple 2048 game simulations.")
     parser.add_argument("games", type=int, help="Number of games to simulate")
-    parser.add_argument("strategy", type=int, choices=[1, 2, 3, 4, 5], help="Strategy to use (1, 2, or 3)")
+    parser.add_argument("strategy", type=int, choices=[1, 2, 3, 4, 5, 6, 7], help="Strategy to use (1, 2, or 3)")
     # 1 - looping moves between w, a, s, d repeatedly until failure
     # 2 - completely random
     # 3 - random pick between going right and going down (make a random choice if you can't do either)
