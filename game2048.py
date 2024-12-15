@@ -225,7 +225,8 @@ def main():
     parser.add_argument("strategy", type=int, choices=[1, 2, 3, 4], help="Strategy to use (1, 2, or 3)")
     # 1 - looping moves between w, a, s, d repeatedly until failure
     # 2 - completely random
-    # 3 - go right until you cant, then down until you cant (repeat with random if both don't work)
+    # 3 - random pick between going right and going down (make a random choice if you can't do either)
+    # 4 - go right until you cant, then down until you cant (repeat with random if both don't work)
     args = parser.parse_args()
 
     total_score = 0
@@ -233,6 +234,11 @@ def main():
     high_tile = 0
 
     # Run the specified number of games
+    if args.games == 0:
+        game = Game2048()
+        game.play()
+
+
     for game_number in range(1, args.games + 1):
         # print(f"Starting Game {game_number} with Strategy {args.strategy}...")
         game = Game2048()
