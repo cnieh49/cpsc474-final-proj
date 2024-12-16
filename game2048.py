@@ -199,7 +199,25 @@ class Game2048:
         self.highest = 2
         self.add_random_tile_new()
         self.add_random_tile_new()
+        self.initial = self.board
 
+    def get_state(self):
+        return tuple(tile for row in self.board for tile in row)
+
+    def initial_state(self):
+        return self.initial
+
+    def get_reward(self):
+        return self.score
+
+    def action_space(self):
+        return 4
+    
+    def game_over(self, state):
+        # Check if there are no valid moves left
+        self.board = [row[:] for row in state]
+        return not self.can_move()
+    
     def next_move(self, move):
         if move == 'w':
             self.slide_up()
@@ -386,6 +404,9 @@ class Game2048:
 
 
 
+        # if strat > 4:
+        #     state = self.get_state()
+        #     return state, self.agent.get_action(state)
 
     def can_move_right(self):
         old_board = [row[:] for row in self.board]
@@ -405,49 +426,15 @@ class Game2048:
         moves = ['w', 'a', 's', 'd']  # Repeated move sequence
         move_index = -1
 
-        # if strat == 3:
-        #     # count = 0
-        #     while self.can_move():
-        #         r_move = True
-        #         d_move = True
-        #         # move_index = self.determine_move(strat, move_index)
-        #         if r_move and d_move:
-        #             move_index = random.randint(2, 3)
-        #         elif r_move:
-        #             move_index = 3
-        #         elif d_move:
-        #             move_index = 2
-        #         else:
-        #             move_index = random.choice([0, 1])  # Random between Up and Left
-        #         move = moves[move_index]
+        # if strat > 4:
+        #     self.agent = QLearning(Game2048(), 9)  # Create a Q-learning agent
 
-        #         old_board = [row[:] for row in self.board]
-        #         if move == 'w':
-        #             self.slide_up()
-        #         elif move == 'a':
-        #             self.slide_left()
-        #         elif move == 's':
-        #             self.slide_down()
-        #         elif move == 'd':
-        #             self.slide_right()
-
-        #         if self.board != old_board:
-        #             self.add_random_tile()
-        #             # count += 1
-        #             if move_index != 2:
-        #                 r_move = True
-        #             if move_index != 3:
-        #                 d_move = True
-        #         else:
-        #             if move_index == 3:
-        #                 r_move = False
-        #             elif move_index == 2:
-        #                 d_move = False
-
-        # else:
         while self.can_move():
             # self.print_board()
             # move3 = input("Enter move (w/a/s/d): ").strip().lower()
+            # if strat > 4:
+            #     state, move_index = self.determine_move(strat, move_index)
+            # else:
             move_index = self.determine_move(strat, move_index)
             # print(f"move_index: {move_index}")
             move = moves[move_index]
@@ -464,6 +451,14 @@ class Game2048:
 
             if self.board != old_board:
                 self.add_random_tile()
+            #     if strat > 4:
+            #         reward = self.get_reward()
+            #         next_state = self.get_state()
+            #         self.agent.update(state, move_index, reward, next_state)
+            # elif strat > 4:
+            #     reward = -1  # Penalize invalid moves
+            #     next_state = state
+            #     self.agent.update(state, move_index, reward, next_state)
 
         return self.score, self.highest
 
@@ -476,9 +471,13 @@ def main():
     # 2 - completely random
     # 3 - random pick between going right and going down (make a random choice if you can't do either)
     # 4 - go right until you cant, then down until you cant (repeat with random if both don't work)
+    # 5 - mcts
+    # 6 - q-learning
+    # 7 - expectimax (if time permits)
     args = parser.parse_args()
 
     total_score = 0
+    total_tiles = {}
     max_score = 0
     high_tile = 0
 
@@ -495,14 +494,21 @@ def main():
 
         # print(f"Game {game_number} Final Score: {game.score}\n")
         total_score += game.score
+        if game.highest in total_tiles:
+            total_tiles[game.highest] += 1
+        else: 
+            total_tiles[game.highest] = 1
         high_tile = max(high_tile, game.highest)
         max_score = max(max_score, game.score)
+
+    sorted_by_keys = dict(sorted(total_tiles.items()))
 
     print("Simulation Complete!")
     print(f"Total Games Played: {args.games}")
     print(f"Highest Score Achieved: {max_score}")
     print(f"Highest Tile Achieved: {high_tile}")
     print(f"Average Score: {total_score / args.games:.2f}")
+    print(f"Highest Tile Distribution: {sorted_by_keys}")
 
 if __name__ == "__main__":
     main()
