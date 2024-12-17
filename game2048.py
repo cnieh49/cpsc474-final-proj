@@ -3,193 +3,178 @@ import os
 import argparse
 import time
 import math
+import copy
+from collections import defaultdict
 
-def expectimax_policy(state, depth):
-    """
-    Determine the best move using the Expectimax algorithm.
-    :param state: Current Game2048 state.
-    :param depth: Depth limit for the Expectimax search.
-    :return: The best move ('w', 'a', 's', 'd').
-    """
+def expectimax_policy(game, depth=3):
     best_move = None
     best_value = float('-inf')
-    moves = state.possible_moves()
+    moves = game.possible_moves()
 
     for move in moves:
-        # Simulate the state for the move
-        board_copy = [row[:] for row in state.board]
-        score_copy = state.score
-        state.next_move(move)
-        
-        # Recursively evaluate using Expectimax
-        value = expectimax(state, depth - 1)
-
-        # Restore the state after simulation
-        state.board = board_copy
-        state.score = score_copy
-
-        # Update the best move if necessary
+        new_game = copy.deepcopy(game)
+        new_game.next_move(move)
+        value = expectimax(new_game, depth - 1)
         if value > best_value:
             best_value = value
             best_move = move
+
     return best_move
 
 
+def evaluate_state(state):
+    position_weight = [
+        [8192, 16384, 32768, 65536],
+        [4096,  2048,  1024,  512,],
+        [32,     64,   128,   256],
+        [16,     8,      4,     2]
+    ]
+    
+    weighted_sum = 0
+    for r in range(state.size):
+        for c in range(state.size):
+            weighted_sum += state.board[r][c] * position_weight[r][c]
+    
+    return state.score + weighted_sum  # Combine score and positional heuristic
 
 def expectimax(state, depth):
-    """
-    Recursive Expectimax algorithm to evaluate the best move.
-    :param state: Current Game2048 state.
-    :param depth: Depth limit for recursion.
-    :return: The expected score of the state.
-    """
-    if depth == 0 or not state.can_move():
-        return state.score
 
-    max_value = float('-inf')
-    for move in state.possible_moves():
-        # Simulate the state for the move
-        board_copy = [row[:] for row in state.board]
-        score_copy = state.score
-        state.next_move(move)
 
-        # Recursively evaluate the state
-        value = expectimax(state, depth - 1)
+    #If game over or depth limit is reached
+    if not state.can_move() or depth == 0:
+        return evaluate_state(state)
 
-        # Restore the state after simulation
-        state.board = board_copy
-        state.score = score_copy
+    # Max Node: Player's turn
+    def max_value(state, depth):
+        moves = state.possible_moves()
+        if not moves:
+            return state.score
+        
+        # Evaluate all possible moves and take the maximum value
+        max_val = float('-inf')
+        for move in moves:
+            new_state = copy.deepcopy(state)
+            new_state.next_move(move)
+            val = expectimax(new_state, depth - 1)
+            max_val = max(max_val, val)
+        return max_val
 
-        max_value = max(max_value, value)
+    # Chance Node: Random tile placement
+    def chance_value(state, depth):
+        empty_cells = [(r, c) for r in range(state.size) for c in range(state.size) if state.board[r][c] == 0]
+        if not empty_cells:
+            return state.score
+        
+        total_value = 0
+        for r, c in empty_cells:
+            new_state = copy.deepcopy(state)
+            new_state.board[r][c] = 2  # Only tile '2' is added
+            total_value += expectimax(new_state, depth - 1)
+        
+        return total_value / len(empty_cells)  # Average value over all possible placements
 
-    return max_value
-
-    # else:
-    #     # Chance node (random tile placement)
-    #     total_value = 0
-    #     empty_tiles = [(r, c) for r in range(state.size) for c in range(state.size) if state.board[r][c] == 0]
-    #     if not empty_tiles:
-    #         return state.score
-
-    #     for r, c in empty_tiles:
-    #         # Simulate placing a '2' (90% probability)
-    #         state.board[r][c] = 2
-    #         value_2 = expectimax(state, depth - 1, True)
-    #         total_value += 0.9 * value_2
-
-    #         # Simulate placing a '4' (10% probability)
-    #         state.board[r][c] = 4
-    #         value_4 = expectimax(state, depth - 1, True)
-    #         total_value += 0.1 * value_4
-
-    #         # Undo the tile placement
-    #         state.board[r][c] = 0
-
-    #     return total_value / len(empty_tiles)
-
+    # If it's the player's turn (max node), evaluate all moves
+    if depth % 2 == 1:  # Odd depth: player's turn
+        return max_value(state, depth)
+    else:  # Even depth: chance node
+        return chance_value(state, depth)
 
 
 
 class Node:
-    def __init__(self, state, action=None):
-        self.state = state
-        self.parent = None
+    def __init__(self, state, parent=None, action=None, is_chance_node=False):
+        self.state = state  # Game2048 instance
+        self.parent = parent
         self.children = []
-        self.n = 0
-        self.r = 0
-        self.action = action
-        self.expanded = False
+        self.n = 0  # Visit count
+        self.r = 0  # Total reward
+        self.action = action  # Action taken to get to this state
+        self.is_chance_node = is_chance_node  # Whether the node is a chance node
 
-def UCB(r, n, T):
-    exploration = math.sqrt(2 * math.log(T) / n)
-    return (r / n) + exploration
+def UCB1(node, total_visits):
+    if node.n == 0:
+        return float('inf')  # Prioritize unvisited nodes
+    exploitation = node.r / node.n
+    exploration = math.sqrt(2 * math.log(total_visits) / node.n)
+    return exploitation + exploration
 
 def traverse(node):
-    while node.expanded:
-        unvisited_children = []
-        for child in node.children:
-            if child.n == 0:
-                unvisited_children.append(child)
-        if unvisited_children:
-            return random.choice(unvisited_children)
-        
-        T = node.n
-        ucb_child = max(node.children, key=lambda child: UCB(child.r, child.n, T))
-        node = ucb_child
+    while node.children:
+        if node.is_chance_node:
+            # Randomly choose a child since tile placement is stochastic
+            node = random.choice(node.children)
+        else:
+            # Use UCB1 to select the best child
+            total_visits = sum(child.n for child in node.children)
+            node = max(node.children, key=lambda child: UCB1(child, total_visits))
     return node
-
 
 def expand(node):
-    """
-    Expand the current node by generating all possible moves.
-    """
-
-    if node.state.can_move() and not node.expanded:
-        actions = node.state.possible_moves()
-
-        for action in actions:
-            new_state = node.state.next_move(action)
-            new_node = Node(new_state, action)
-            new_node.parent = node
-            node.children.append(new_node)
-        node.expanded = True
-        return random.choice(node.children)
-    return node
+    if node.is_chance_node:
+        # Expand chance nodes by adding tile '2' in random empty cells
+        empty_cells = [(r, c) for r in range(node.state.size) for c in range(node.state.size) if node.state.board[r][c] == 0]
+        for r, c in empty_cells:
+            new_state = copy.deepcopy(node.state)
+            new_state.board[r][c] = 2
+            child = Node(new_state, parent=node, is_chance_node=False)
+            node.children.append(child)
+    else:
+        # Expand decision nodes by adding valid moves
+        for move in node.state.possible_moves():
+            new_state = copy.deepcopy(node.state)
+            new_state.next_move(move)
+            child = Node(new_state, parent=node, action=move, is_chance_node=True)
+            node.children.append(child)
 
 
 def simulate(state):
-    """
-    Simulate a random playthrough from the given state and return the score.
-    """
-    while state.can_move():
-        actions = state.possible_moves()
-        action = random.choice(actions)
-        state = state.next_move(action)
-    return state.score
+    simulation_state = copy.deepcopy(state)
+    for _ in range(25):
+        if not simulation_state.can_move():
+            break
 
+        # Choose the move that maximizes the heuristic evaluation
+        moves = simulation_state.possible_moves()
+        best_move = max(
+            moves,
+            key=lambda move: evaluate_state(copy.deepcopy(simulation_state).next_move(move))
+        )
+        simulation_state.next_move(best_move)
 
-def update(node, reward):
-    """
-    Backpropagate the simulation results through the tree.
-    """
+        # random play doesn't perform well so we instead play a few rounds to get the best move
+        # move = random.choice(simulation_state.possible_moves())
+        # simulation_state.next_move(move)
+    return evaluate_state(simulation_state)
+
+def backpropagate(node, reward):
     while node:
         node.n += 1
         node.r += reward
         node = node.parent
 
-def mcts_policy(root_state, time_limit=3.0):
-    """
-    Run MCTS to determine the best move from the root state.
-    """
-    root = Node(root_state)
+def mcts_policy(root_state, time_limit):
+    root = Node(root_state, is_chance_node=False)
     start_time = time.time()
-
+    
     while time.time() - start_time < time_limit:
         # Selection
         leaf = traverse(root)
-
-        # Expansion
-        expanded_node = expand(leaf)
-
-        # Simulation
-        reward = simulate(expanded_node.state)
-
-        # Backpropagation
-        update(expanded_node, reward)
         
-
-    # Choose the best move based on visits
-    best_child = max(root.children, key=lambda c: c.r / c.n)
+        # Expansion
+        if not leaf.children and leaf.state.can_move():
+            expand(leaf)
+        
+        # Simulation
+        if leaf.children:
+            leaf = random.choice(leaf.children)
+        reward = simulate(leaf.state)
+        
+        # Backpropagation
+        backpropagate(leaf, reward)
+    
+    # Choose the best move (child with the most visits)
+    best_child = max(root.children, key=lambda c: c.n)
     return best_child.action
-
-
-
-
-
-
-
-
-
 
 class Game2048:
     def __init__(self):
@@ -234,31 +219,21 @@ class Game2048:
 
     def possible_moves(self):
         moves = []
-        old_board = [row[:] for row in self.board]
+        for direction, slide_func in [('w', self.slide_up), ('a', self.slide_left), 
+                                    ('s', self.slide_down), ('d', self.slide_right)]:
+            # Store the original board state
+            original_board = [row[:] for row in self.board]
 
-        self.slide_up()
-        if self.board != old_board:
-            moves.append("w")
-        else:
-            self.board = [row[:] for row in old_board]
+            # Apply the move
+            slide_func()
 
-        self.slide_left()
-        if self.board != old_board:
-            moves.append("a")
-        else:
-            self.board = [row[:] for row in old_board]
+            # If the board changes, the move is valid
+            if self.board != original_board:
+                moves.append(direction)
 
-        self.slide_down()
-        if self.board != old_board:
-            moves.append("s")
-        else:
-            self.board = [row[:] for row in old_board]
+            # Restore the original board
+            self.board = original_board
 
-        self.slide_right()
-        if self.board != old_board:
-            moves.append("d")
-        else:
-            self.board = [row[:] for row in old_board]
         return moves
 
 
@@ -267,7 +242,7 @@ class Game2048:
         if not empty_tiles:
             return
         r, c = random.choice(empty_tiles)
-        self.board[r][c] = 2 if random.random() < 0.9 else 4
+        self.board[r][c] = 2 #only add 2
         self.highest = self.board[r][c] if self.board[r][c] > self.highest else self.highest
     
     def add_random_tile(self):
@@ -275,7 +250,7 @@ class Game2048:
         if not empty_tiles:
             return
         r, c = random.choice(empty_tiles)
-        self.board[r][c] = 2 if random.random() < 0.9 else 4
+        self.board[r][c] = 2 #only add 2
 
     def can_move(self):
         for r in range(self.size):
@@ -388,16 +363,18 @@ class Game2048:
                 elif r_move:
                     return 3
             return random.choice([0, 1])
-        if strat == 5:
+        if strat == 5: #mcts
+            self.print_board()
+            root = copy.deepcopy(self)
             moves = ['w', 'a', 's', 'd']
-            move = mcts_policy(self, time_limit=1.0)
+            move = mcts_policy(root, 1)
             return moves.index(move)
         
 
         if strat == 7:
             self.print_board()
             moves = ['w', 'a', 's', 'd']
-            move = expectimax_policy(self, 3)  # Adjust depth for performance
+            move = expectimax_policy(self, 5)  # Adjust depth for performance
             return moves.index(move)
 
 
@@ -477,9 +454,10 @@ def main():
     args = parser.parse_args()
 
     total_score = 0
-    total_tiles = {}
+    total_tiles = defaultdict(int)
     max_score = 0
     high_tile = 0
+    total_wins = 0
 
     # Run the specified number of games
     if args.games == 0:
@@ -494,14 +472,13 @@ def main():
 
         # print(f"Game {game_number} Final Score: {game.score}\n")
         total_score += game.score
-        if game.highest in total_tiles:
-            total_tiles[game.highest] += 1
-        else: 
-            total_tiles[game.highest] = 1
+        total_tiles[game.highest] += 1
         high_tile = max(high_tile, game.highest)
         max_score = max(max_score, game.score)
+        if high_tile >= 2048:
+            total_wins += 1
 
-    sorted_by_keys = dict(sorted(total_tiles.items()))
+    sorted_by_keys = dict(sorted(total_tiles.items(), reverse=True))
 
     print("Simulation Complete!")
     print(f"Total Games Played: {args.games}")
@@ -509,6 +486,7 @@ def main():
     print(f"Highest Tile Achieved: {high_tile}")
     print(f"Average Score: {total_score / args.games:.2f}")
     print(f"Highest Tile Distribution: {sorted_by_keys}")
+    print(f"Win Percentage: {total_wins / args.games:.2f}")
 
 if __name__ == "__main__":
     main()
