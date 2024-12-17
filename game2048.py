@@ -419,14 +419,14 @@ class Game2048:
         self.board = old_board  # Restore board
         return can_move
 
-    def simulate_game(self, strat):
+    def simulate_game(self, strat, limit):
         moves = ['w', 'a', 's', 'd']  # Repeated move sequence
         move_index = -1
 
         # if strat > 4:
         #     self.agent = QLearning(Game2048(), 9)  # Create a Q-learning agent
-
-        while self.can_move():
+        start_time = time.time()
+        while self.can_move() and ((time.time() - start_time) < limit * .99):
             # self.print_board()
             # move3 = input("Enter move (w/a/s/d): ").strip().lower()
             # if strat > 4:
@@ -459,11 +459,30 @@ class Game2048:
 
         return self.score, self.highest
 
+# def can_move_test(board):
+#     size = len(board)
+#     for r in range(size):
+#         for c in range(size):
+#             if board[r][c] == 0:
+#                 return True
+#             if c + 1 < size and board[r][c] == board[r][c + 1]:
+#                 return True
+#             if r + 1 < size and board[r][c] == board[r + 1][c]:
+#                 return True
+#     return False
+
 def main():
     # Parse command-line arguments
+    # test_board = [[4,8,32,256], [16,64,256,16], [4,8,16,2], [2,4,8,2]]
+    # if can_move_test(test_board):
+    #     print("hello!!")
+    # else:
+    #     print("bye")
+
     parser = argparse.ArgumentParser(description="Run multiple 2048 game simulations.")
     parser.add_argument("games", type=int, help="Number of games to simulate")
     parser.add_argument("strategy", type=int, choices=[1, 2, 3, 4, 5, 6, 7], help="Strategy to use (1, 2, or 3)")
+    parser.add_argument("limit", type=int, nargs='?', help="total amount of time that a set of games can run")
     # 1 - looping moves between w, a, s, d repeatedly until failure
     # 2 - completely random
     # 3 - random pick between going right and going down (make a random choice if you can't do either)
@@ -485,10 +504,15 @@ def main():
         game = Game2048()
         game.play()
 
+    if args.limit is None:
+        time_limit = float('inf')
+    else:
+        time_limit = args.limit
+
     for game_number in range(1, args.games + 1):
         # print(f"Starting Game {game_number} with Strategy {args.strategy}...")
         game = Game2048()
-        game.simulate_game(strat=args.strategy)
+        game.simulate_game(strat=args.strategy, limit=time_limit)
 
         # print(f"Game {game_number} Final Score: {game.score}\n")
         total_score += game.score
