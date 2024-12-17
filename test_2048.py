@@ -23,6 +23,14 @@ different approaches. One would randomly choose between going down and going rig
 and the other would alternate between going right until you wouldn't any longer, and going down until you couldn't any
 longer, both choosing arbitrary values when neither right or down were viable options.
 
+When comparing to our baseline, we have a few ways we can compare, the main ones being the highest tile distribution
+across games, as well as the average score. While they are both indications of the success of an agent or strategy,
+these will differ slightly, depending on the strategy. For example, from our baseline agents, the greedy strategy will
+return the highest average score. However, its highest tile distribution is not as strong as the right/down strategies,
+as those will prioritize highest piece over score.
+
+
+
 
 """
 

@@ -5,6 +5,7 @@ import time
 import math
 import copy
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def expectimax_policy(game, depth=3):
     best_move = None
@@ -426,6 +427,7 @@ class Game2048:
         # if strat > 4:
         #     self.agent = QLearning(Game2048(), 9)  # Create a Q-learning agent
         start_time = time.time()
+        # print(f"{limit}")
         while self.can_move() and ((time.time() - start_time) < limit * .99):
             # self.print_board()
             # move3 = input("Enter move (w/a/s/d): ").strip().lower()
@@ -471,6 +473,13 @@ class Game2048:
 #                 return True
 #     return False
 
+def simulate_single_game(game_number, strategy, time_limit):
+    game = Game2048()
+    game.simulate_game(strat=strategy, limit=time_limit)
+    
+    # Return the relevant data for aggregation
+    return (game.score, game.highest)
+
 def main():
     # Parse command-line arguments
     # test_board = [[4,8,32,256], [16,64,256,16], [4,8,16,2], [2,4,8,2]]
@@ -492,35 +501,55 @@ def main():
     # 7 - expectimax (if time permits)
     # 8 - qlearning
     args = parser.parse_args()
+    # Run the specified number of games
+    if args.games == 0:
+        game = Game2048()
+        game.play()
+        return
 
+    if args.limit is None:
+        time_limit = float('inf')
+    else:
+        time_limit = args.limit
+    
     total_score = 0
     total_tiles = defaultdict(int)
     max_score = 0
     high_tile = 0
     total_wins = 0
 
-    # Run the specified number of games
-    if args.games == 0:
-        game = Game2048()
-        game.play()
+    with ProcessPoolExecutor() as executor:
+        futures = []
+        
+        # Submit each game as a task
+        for game_number in range(1, args.games + 1):
+            futures.append(executor.submit(simulate_single_game, game_number, args.strategy, time_limit))
+        
+        # Process results as the games complete
+        for future in as_completed(futures):
+            score, highest = future.result()
 
-    if args.limit is None:
-        time_limit = float('inf')
-    else:
-        time_limit = args.limit
+            # Update aggregates
+            total_score += score
+            total_tiles[highest] += 1
+            high_tile = max(high_tile, highest)
+            max_score = max(max_score, score)
+            if highest >= 2048:
+                total_wins += 1
 
-    for game_number in range(1, args.games + 1):
-        # print(f"Starting Game {game_number} with Strategy {args.strategy}...")
-        game = Game2048()
-        game.simulate_game(strat=args.strategy, limit=time_limit)
 
-        # print(f"Game {game_number} Final Score: {game.score}\n")
-        total_score += game.score
-        total_tiles[game.highest] += 1
-        high_tile = max(high_tile, game.highest)
-        max_score = max(max_score, game.score)
-        if game.highest >= 2048:
-            total_wins += 1
+    # for game_number in range(1, args.games + 1):
+    #     # print(f"Starting Game {game_number} with Strategy {args.strategy}...")
+    #     game = Game2048()
+    #     game.simulate_game(strat=args.strategy, limit=time_limit)
+
+    #     # print(f"Game {game_number} Final Score: {game.score}\n")
+    #     total_score += game.score
+    #     total_tiles[game.highest] += 1
+    #     high_tile = max(high_tile, game.highest)
+    #     max_score = max(max_score, game.score)
+    #     if game.highest >= 2048:
+    #         total_wins += 1
 
     strat_name = ["wasd on repeat", "random", "random right/down", "right then down", "greedy (take highest score)", "mcts", "expectimax"]
     sorted_by_keys = dict(sorted(total_tiles.items(), reverse=True))
