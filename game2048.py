@@ -80,7 +80,6 @@ def expectimax(state, depth):
         return chance_value(state, depth)
 
 
-
 class Node:
     def __init__(self, state, parent=None, action=None, is_chance_node=False):
         self.state = state  # Game2048 instance
