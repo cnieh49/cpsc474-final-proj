@@ -79,7 +79,6 @@ def expectimax(state, depth):
     else:  # Even depth: chance node
         return chance_value(state, depth)
 
-
 class Node:
     def __init__(self, state, parent=None, action=None, is_chance_node=False):
         self.state = state  # Game2048 instance
@@ -234,7 +233,33 @@ class Game2048:
             self.board = original_board
 
         return moves
+    
+    def greedy_moves(self):
+        highest_score = -1
+        moves = []
+        for direction, slide_func in [(0, self.slide_up), (1, self.slide_left), 
+                                    (2, self.slide_down), (3, self.slide_right)]:
+            # Store the original board state
+            original_board = [row[:] for row in self.board]
 
+            # Apply the move
+            slide_func()
+
+            # If the board changes, the move is valid
+            if self.board != original_board:
+                moves.append((direction, self.score))
+                if self.score > highest_score:
+                    highest_score = self.score
+
+            # Restore the original board
+            self.board = original_board
+        if highest_score < 0:
+            return random.randint(0, 3)
+        highest_moves = []
+        for direction, score in moves:
+            if score >= highest_score:
+                highest_moves.append(direction)
+        return highest_moves[random.randint(0, len(highest_moves) - 1)]
 
     def add_random_tile_new(self):
         empty_tiles = [(r, c) for r in range(self.size) for c in range(self.size) if self.board[r][c] == 0]
@@ -362,23 +387,19 @@ class Game2048:
                 elif r_move:
                     return 3
             return random.choice([0, 1])
-        if strat == 5: #mcts
-            self.print_board()
+        if strat == 5: #greedy
+            return self.greedy_moves()
+        if strat == 6: #mcts
+            # self.print_board()
             root = copy.deepcopy(self)
             moves = ['w', 'a', 's', 'd']
             move = mcts_policy(root, 1)
             return moves.index(move)
-        
-
         if strat == 7:
-            self.print_board()
+            # self.print_board()
             moves = ['w', 'a', 's', 'd']
             move = expectimax_policy(self, 5)  # Adjust depth for performance
             return moves.index(move)
-
-
-
-
 
         # if strat > 4:
         #     state = self.get_state()
@@ -447,9 +468,10 @@ def main():
     # 2 - completely random
     # 3 - random pick between going right and going down (make a random choice if you can't do either)
     # 4 - go right until you cant, then down until you cant (repeat with random if both don't work)
-    # 5 - mcts
-    # 6 - q-learning
+    # 5 - greedy, always make the move that results in the highest added score, else move randomly
+    # 6 - mcts
     # 7 - expectimax (if time permits)
+    # 8 - qlearning
     args = parser.parse_args()
 
     total_score = 0
@@ -463,7 +485,6 @@ def main():
         game = Game2048()
         game.play()
 
-
     for game_number in range(1, args.games + 1):
         # print(f"Starting Game {game_number} with Strategy {args.strategy}...")
         game = Game2048()
@@ -474,12 +495,13 @@ def main():
         total_tiles[game.highest] += 1
         high_tile = max(high_tile, game.highest)
         max_score = max(max_score, game.score)
-        if high_tile >= 2048:
+        if game.highest >= 2048:
             total_wins += 1
 
+    strat_name = ["wasd on repeat", "random", "random right/down", "right then down", "greedy (take highest score)", "mcts", "expectimax"]
     sorted_by_keys = dict(sorted(total_tiles.items(), reverse=True))
 
-    print("Simulation Complete!")
+    print(f"Simulation Complete! Strategy: {strat_name[args.strategy - 1]}")
     print(f"Total Games Played: {args.games}")
     print(f"Highest Score Achieved: {max_score}")
     print(f"Highest Tile Achieved: {high_tile}")
