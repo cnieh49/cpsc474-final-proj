@@ -375,7 +375,7 @@ class Game2048:
         if strat == 4: #mcts
             # self.print_board()
             moves = ['w', 'a', 's', 'd']
-            move = mcts_policy(self, .1)
+            move = mcts_policy(self, .5)
             return moves.index(move)
         
         if strat == 5: #expectimax
