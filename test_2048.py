@@ -30,6 +30,7 @@ We choose the next best move instead of a random move because in 2048 we don't w
 results that were similar to the random agent. This is because in 2048 our moves cannot be random if we want to make the best play.
 Even with pruning MCTS is the slowest to run as there are simply way to may states to visit all of them in a timely manner. We implemented the
 tree as move nodes and chance nodes where move nodes could have up to 4 children (w, a, s, d) and chance nodes could have up to 15 children (1 for each empty tile on the grid- we always have 1 tile minimum)
+Due to the large state space, mcts runs slow and if we set the time limit too low, it may cause mcts to end before it has explore all children nodes of the root state causing a divide by zero error
 
 When implementing expectimax we found that depth that were odd performed better and depths of 3 and 5 were best mix of performance and time
 Why odd?
