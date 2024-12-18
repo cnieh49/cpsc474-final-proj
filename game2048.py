@@ -432,6 +432,7 @@ def simulate_single_game(game_number, strategy, time_limit):
     return (game.score, game.highest)
 
 def main():
+    #begin_time = time.time()
     # 1 - completely random
     # 2 - random pick between going right and going down (make a random choice if you can't do either)
     # 3 - greedy, always make the move that results in the highest added score, else move randomly
@@ -490,6 +491,8 @@ def main():
     print(f"Average Score: {total_score / args.games:.2f}")
     print(f"Highest Tile Distribution: {sorted_by_keys}")
     print(f"Win Percentage: {total_wins / args.games:.2f}")
+    # end_time = time.time()
+    # print(f"Start time: {begin_time}, end time: {end_time}, time elapsed: {end_time - begin_time:.3f}")
 
 if __name__ == "__main__":
     main()
